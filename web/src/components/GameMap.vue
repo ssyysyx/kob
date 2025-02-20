@@ -2,7 +2,7 @@
     <!-- 游戏地图的容器，包含一个 canvas 元素 -->
     <div ref="parent" class="gamemap">
         <!-- 游戏内容绘制到这个 canvas 画布里面 -->
-         <canvas ref="canvas"></canvas>  <!-- canvas 元素用来作为游戏绘图的区域 -->
+         <canvas ref="canvas" tabindex="0"></canvas>  <!-- canvas 元素用来作为游戏绘图的区域 -->
     </div>
 </template>
 
