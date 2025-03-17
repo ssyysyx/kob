@@ -7,6 +7,7 @@ export default {
         photo: "",
         token: "",
         is_login: false,
+        pulling_info: true, //是否正在拉取信息，如果正在获取信息，就不要展示登录页面
     },
     // getters一般用不到
     getters: {
@@ -28,6 +29,9 @@ export default {
             state.photo = "";
             state.token = "";
             state.is_login = false;
+        },
+        updatePullingInfo(state, pulling_info) {
+            state.pulling_info = pulling_info;
         }
     },
     // 在actions里面调用mutations里面的函数需要用commit+字符串
@@ -45,6 +49,7 @@ export default {
                     // `resp` 是后端返回的数据
                     if (resp.error_message === "success") {
                         // 登录成功，存储 token
+                        localStorage.setItem("jwt_token", resp.token);
                         context.commit("updateToken", resp.token);
 
                         // 调用前端传入的 success 回调函数
@@ -88,6 +93,7 @@ export default {
             });
         },
         logout(context) {
+            localStorage.removeItem("jwt_token");
             context.commit("logout");
         },
     },
@@ -95,5 +101,3 @@ export default {
     }
 }
 
-
-3

@@ -1,5 +1,5 @@
 <template>
-    <ContentField>
+    <ContentField v-if="!$store.state.user.pulling_info">
         <!-- 登录界面 -->
         <div class="row justify-content-md-center">
             <div class="col-3">
@@ -43,6 +43,24 @@ export default {
         let username = ref(''); // 创建 `username` 响应式变量，绑定到输入框
         let password = ref(''); // 创建 `password` 响应式变量，绑定到输入框
         let error_message = ref(''); // 创建 `error_message` 响应式变量，存储错误信息
+
+        const jwt_token = localStorage.getItem("jwt_token");
+        if (jwt_token) {
+            // 更新token的函数，使用mutation里的函数要用commit，使用actions里面的函数用dispatch
+            store.commit("updateToken", jwt_token);
+            // 从云端获取信息
+            store.dispatch("getinfo", {
+                success() {
+                    router.push({ name: "home" });
+                    store.commit("updatePullingInfo", false);
+                },
+                error() {
+                    store.commit("updatePullingInfo", false);
+                }
+            })
+        } else {
+            store.commit("updatePullingInfo", false);
+        }
 
         // `login` 方法：当用户点击提交按钮时触发
         const login = () => {
