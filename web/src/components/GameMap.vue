@@ -12,17 +12,19 @@ import { GameMap } from "@/assets/scripts/GameMap";
 
 // 引入 Vue 的 ref 和 onMounted，ref 用来创建响应式数据，onMounted 用来处理组件挂载后的逻辑
 import { ref, onMounted } from 'vue';
+import { useStore } from "vuex";
 
 export default {
     setup() {
         // 在 Vue 3 中，定义响应式变量需要使用 ref
+        const store = useStore();
         let parent = ref(null);  // 用来引用父容器 div 元素
         let canvas = ref(null);  // 用来引用 canvas 元素
 
         // 使用 onMounted 钩子，组件挂载完后执行的操作
         onMounted(() => {
             // 创建 GameMap 对象，并传入 canvas 的 2D 上下文和父元素
-            new GameMap(canvas.value.getContext('2d'), parent.value)
+            new GameMap(canvas.value.getContext('2d'), parent.value, store)
         })
 
         // 返回响应式数据，以便模板中使用
