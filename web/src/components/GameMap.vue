@@ -24,7 +24,10 @@ export default {
         // 使用 onMounted 钩子，组件挂载完后执行的操作
         onMounted(() => {
             // 创建 GameMap 对象，并传入 canvas 的 2D 上下文和父元素
-            new GameMap(canvas.value.getContext('2d'), parent.value, store)
+            store.commit(
+                "updateGameObject", 
+                new GameMap(canvas.value.getContext('2d'), parent.value, store)
+            );
         })
 
         // 返回响应式数据，以便模板中使用

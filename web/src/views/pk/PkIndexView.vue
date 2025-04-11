@@ -2,12 +2,14 @@
     <!-- 页面中只渲染一个 PlayGround 组件 -->
     <PlayGround v-if="$store.state.pk.status === 'playing'"/>
     <MatchGround v-if="$store.state.pk.status === 'matching'"/>
+    <ResultBoard v-if="$store.state.pk.loser != 'none'" />
 </template>
 
 <script>
 // 引入 PlayGround 组件，用于显示游戏界面等功能
 import PlayGround from '../../components/PlayGround.vue'
 import MatchGround from '../../components/MatchGround.vue'
+import ResultBoard from '../../components/ResultBoard.vue'
 
 // onMounted：组件挂载时执行；onUnmounted：组件卸载时执行
 import { onMounted, onUnmounted } from 'vue'
@@ -20,6 +22,7 @@ export default {
         // 注册局部组件
         PlayGround,
         MatchGround,
+        ResultBoard,
     },
     setup() {
         // 获取全局的 Vuex store 实例
@@ -55,11 +58,28 @@ export default {
                         username: data.opponent_username,
                         photo: data.opponent_photo,
                     });
-                    // 2000毫秒之后再执行
+                    // 2000毫秒之后再执行，调试的时候可以先200ms
                     setTimeout(() => {
                         store.commit("updateStatus", "playing");
-                    }, 2000);
-                    store.commit("updateGamemap", data.gamemap);
+                    }, 200);
+                    store.commit("updateGame", data.game);
+                } else if (data.event === "move") {
+                    const game = store.state.pk.gameObject;
+                    const [snake0, snake1] = game.snakes;
+                    snake0.set_direction(data.a_direction);
+                    snake1.set_direction(data.b_direction);
+                } else if (data.event === "result") {
+                    // 先取出蛇
+                    const game = store.state.pk.gameObject;
+                    const [snake0, snake1] = game.snakes;
+
+                   if (data.loser === "all" || data.loser === "A") {
+                    snake0.status = "die";
+                   } 
+                   if (data.loser === "all" || data.loser === "B") {
+                    snake1.status = "die";
+                   }
+                   store.commit("updateLoser", data.loser);
                 }
             }
 

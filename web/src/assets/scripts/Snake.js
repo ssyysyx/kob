@@ -55,6 +55,7 @@ export class Snake extends AcGameObject {
         if (this.step % 3 === 1) return true;
         return false;
     }
+    
 //走到目标点了
     next_step() { //将蛇的状态变为走下一步
         const d = this.direction;

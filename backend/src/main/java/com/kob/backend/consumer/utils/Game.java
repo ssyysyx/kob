@@ -1,22 +1,65 @@
 package com.kob.backend.consumer.utils; // 声明当前类所在的包
 
-import java.util.Random; // 导入随机数类
+import com.alibaba.fastjson.JSONObject;
+import com.kob.backend.consumer.WebSocketServer;
+import com.kob.backend.pojo.Record;
+import org.springframework.security.core.parameters.P;
 
-public class Game { // 定义 Game 类，用于生成地图
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+import java.util.Random; // 导入随机数类
+import java.util.concurrent.locks.ReentrantLock;
+
+public class Game extends Thread { // 定义 Game 类，用于生成地图
     // 定义地图行数、列数、内部墙的数量，以及地图数组 g（0 表示空地，1 表示墙）
-    final private Integer rows;
-    final private Integer cols;
-    final private Integer inner_walls_count;
-    final private int[][] g; // 二维数组，存放地图数据
+    private final Integer rows;
+    private final Integer cols;
+    private final Integer inner_walls_count;
+    private final int[][] g; // 二维数组，存放地图数据
     // 定义四个方向的数组，分别表示上、右、下、左（用于搜索时计算邻居坐标）
-    final private static int[] dx = {-1, 0, 1, 0}, dy = {0, 1, 0, -1};
+    private final static int[] dx = {-1, 0, 1, 0}, dy = {0, 1, 0, -1};
+    private final Player playerA, playerB;
+    private Integer nextStepA = null; // 第一名玩家的下一步操作 初始为空表示没有获取到下一步的操作
+    private Integer nextStepB = null; // 第二名玩家的下一步操作 如果不是空的话，0123表示上下左右四个方向
+    private ReentrantLock lock = new ReentrantLock(); // 定义锁
+    private String status = "playing"; // playing -> finished
+    private String loser = ""; // all: 平局 A: A输 B: B输了
 
     // 构造函数，传入地图的行数、列数和内部墙数量
-    public Game(Integer rows, Integer cols, Integer inner_walls_count) {
+    public Game(Integer rows, Integer cols, Integer inner_walls_count, Integer idA, Integer idB) {
         this.rows = rows; // 初始化行数
         this.cols = cols; // 初始化列数
         this.inner_walls_count = inner_walls_count; // 初始化内部墙的数量
         this.g = new int[rows][cols]; // 根据行数和列数创建二维数组，初始默认值为0
+        playerA = new Player(idA, rows - 2, 1, new ArrayList<>());
+        playerB = new Player(idB, 1, cols - 2, new ArrayList<>());
+    }
+
+    public Player getPlayerA() {
+        return playerA;
+    }
+
+    public Player getPlayerB() {
+        return playerB;
+    }
+
+    public void setNextStepA(Integer nextStepA) {
+        lock.lock();
+        try {
+            this.nextStepA = nextStepA;
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    public void setNextStepB(Integer nextStepB) {
+        lock.lock();
+        try {
+            this.nextStepB = nextStepB;
+        } finally {
+            lock.unlock();
+        }
     }
 
     // 返回地图数组
@@ -102,4 +145,171 @@ public class Game { // 定义 Game 类，用于生成地图
                 break;
         }
     }
+
+    private boolean nextStep() { // 等待两名玩家的下一步操作
+        try {
+            // 防止动画没画完之前就变道了
+            Thread.sleep(200);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+        for (int i = 0; i < 50; i ++) {
+            // 调用 Thread 类的静态方法 sleep，让 当前线程 休眠指定的毫秒数
+            try {
+                Thread.sleep(100);
+                lock.lock();
+                try {
+                    // 判断两名玩家有没有都获得输入
+                    if (nextStepA != null && nextStepB != null) {
+                        playerA.getSteps().add(nextStepA);
+                        playerB.getSteps().add(nextStepB);
+                        return true;
+                    }
+                } finally {
+                    lock.unlock();
+                }
+
+            } catch (InterruptedException e) {
+                // throw new RuntimeException(e);
+                e.printStackTrace();
+            }
+        }
+        return false;
+    }
+
+    // 辅助函数：向前端返回信息
+    private void sendMove() { // 向两个Client传递移动信息
+        // 由于需要读入nextStep，这里要加锁
+        lock.lock();
+        try {
+            JSONObject resp = new JSONObject();
+            resp.put("event", "move");
+            resp.put("a_direction", nextStepA);
+            resp.put("b_direction", nextStepB);
+            sendAllMessage(resp.toJSONString());
+            // 向前端返回完两个玩家的操作之后，就要进行下一步操作了，进行下一步操作之前需要清空
+            nextStepA = nextStepB = null;
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    private boolean check_valid(List<Cell> cellsA, List<Cell> cellsB) {
+        int n = cellsA.size();
+         Cell cell = cellsA.get(n - 1);
+         if (g[cell.x][cell.y] == 1) return false;
+
+         // 判断最后一位是不是和A有重合
+         for (int i = 0; i < n - 1; i ++) {
+             if (cellsA.get(i).x == cell.x && cellsA.get(i).y == cell.y)
+                 return false;
+         }
+
+         for (int i = 0; i < n - 1; i ++) {
+             if (cellsB.get(i).x == cell.x && cellsB.get(i).y == cell.y)
+                 return false;
+         }
+
+         return true;
+    }
+
+    // 辅助函数
+    private void judge() { //判断两名玩家下一步操作是否合法
+        List<Cell> cellsA = playerA.getCells();
+        List<Cell> cellsB = playerB.getCells();
+
+        boolean validA = check_valid(cellsA, cellsB);
+        boolean validB = check_valid(cellsB, cellsA);
+        if (!validA || !validB) {
+            status = "finished";
+
+            if (!validA && !validB) {
+                loser = "all";
+            } else if (!validA) {
+                loser = "A";
+            } else {
+                loser = "B";
+            }
+        }
+    }
+
+    // 辅助函数：向两名玩家广播信息
+    private void sendAllMessage(String message) {
+        WebSocketServer.users.get(playerA.getId()).sendMessage(message);
+        WebSocketServer.users.get(playerB.getId()).sendMessage(message);
+    }
+
+    private String getMapString() {
+        StringBuilder res = new StringBuilder();
+        for (int i = 0; i < rows; i ++) {
+            for (int j = 0; j < cols; j ++) {
+                res.append(g[i][j]);
+            }
+        }
+        return res.toString();
+    }
+
+    private void saveToDatabase() {
+       Record record = new Record(
+               null,
+               playerA.getId(),
+               playerA.getSx(),
+               playerA.getSy(),
+               playerB.getId(),
+               playerB.getSx(),
+               playerB.getSy(),
+               playerA.getStepsString(),
+               playerB.getStepsString(),
+               getMapString(),
+               loser,
+               new Date()
+       );
+       WebSocketServer.recordMapper.insert(record);
+    }
+
+    private void sendResult() { // 向两个Client公布结果
+        JSONObject resp = new JSONObject();
+        resp.put("event", "result");
+        resp.put("loser", loser);
+        saveToDatabase();
+        sendAllMessage(resp.toJSONString());
+    }
+
+    @Override
+    public void run() {
+        for (int i = 0; i < 1000; i ++) {
+            if (nextStep()) { // 是否获取了两条蛇的下一步操作
+                // 判断两名玩家
+                judge();
+                if (status.equals("playing")) {
+                    // 服务器需要将两名玩家的输入分别广播给两个人 C1和C2是知道自己的操作的，但是C1不知道C2的操作，C2不知道C1的操作。
+                    // 这里依赖于中心服务器向两名玩家广播每条蛇的操作。
+                    sendMove();
+                } else {
+                    sendResult();
+                    break;
+                }
+
+            } else {
+                status = "finished";
+                lock.lock();
+                try {
+                    // 这里涉及到对nextStep的读，也要加锁
+                    if (nextStepA == null && nextStepB == null) {
+                        loser = "all";
+                    } else if (nextStepA == null) {
+                        loser = "A";
+                    } else {
+                        loser = "B";
+                    }
+                } finally {
+                    lock.unlock();
+                }
+                // break表示整个游戏结束了，break前要向两名玩家发送消息
+                sendResult();
+                break;
+            }
+        }
+    }
 }
+
